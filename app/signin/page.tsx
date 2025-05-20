@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Film } from "lucide-react"
-import { login } from "@/app/api/users/authService"
+import { login } from "@/lib/api/users/authService"
 
 export default function SignInPage() {
   const router = useRouter()

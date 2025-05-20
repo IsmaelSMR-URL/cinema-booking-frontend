@@ -1,194 +1,260 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, FormEvent } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+  DialogFooter,
+  DialogDescription, // Importa DialogDescription
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
-} from "@/components/ui/select"
-import type { User } from "@/lib/api-services"
+  SelectValue,
+} from "@/components/ui/select";
+
+// Importa los tipos desde tu api-services.ts centralizado
+import type { UserType, NewUserPayload, UpdateUserPayload } from "@/lib/api-services";
 
 interface UserDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  user: User | null
-  mode: "create" | "edit" | "view"
-  onSave: (user: Partial<User>) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  user: UserType | null; // El usuario que se está viendo/editando
+  mode: "create" | "edit" | "view";
+  onSave: (data: NewUserPayload | UpdateUserPayload) => void; // Función para guardar/crear
 }
+
+// Define un tipo para el estado del formulario interno del diálogo
+type UserDialogFormData = {
+  name: string;
+  email: string;
+  role: 'admin' | 'user'; // Asegúrate que coincida con UserType['role']
+  password?: string;
+  dni?: string;
+  telefono?: string;
+  // No incluyas user_id aquí, se maneja a través de props.user
+  // registeredDate y status son más para visualización si vienen del backend
+  registeredDate?: string;
+  status?: string;
+};
 
 export default function UserDialog({
   open,
   onOpenChange,
-  user,
+  user, // Este es UserType | null
   mode,
-  onSave
+  onSave,
 }: UserDialogProps) {
-  const [formData, setFormData] = useState<Partial<User & { password?: string }>>({
+  const [formData, setFormData] = useState<UserDialogFormData>({
     name: "",
     email: "",
-    role: "client",
-    password: ""
-  })
+    role: "user", // Rol por defecto para creación
+    password: "",
+    dni: "",
+    telefono: "",
+  });
+
+  const isCreateMode = mode === "create";
+  const isViewMode = mode === "view";
 
   useEffect(() => {
-    if (user) {
+    if (user && (mode === "edit" || mode === "view")) {
       setFormData({
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        registeredDate: user.registeredDate
-      })
-    } else {
+        name: user.name || "",
+        email: user.email || "",
+        role: user.role || "user", // Rol por defecto si no está definido
+        dni: user.dni || "",
+        telefono: user.telefono || "",
+        password: "", // La contraseña no se pre-rellena para editar
+        registeredDate: user.registeredDate, // Para visualización
+        status: user.status, // Para visualización
+      });
+    } else if (mode === "create") {
+      // Resetear el formulario para el modo creación
       setFormData({
         name: "",
         email: "",
-        role: "client",
-        password: ""
-      })
+        role: "user",
+        password: "",
+        dni: "",
+        telefono: "",
+      });
     }
-  }, [user, open])
+  }, [user, mode, open]); // 'open' para resetear si se reabre en modo 'create'
 
-  const handleChange = (field: keyof typeof formData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSave(formData)
-  }
+  const handleRoleChange = (value: 'admin' | 'user') => {
+    setFormData((prev) => ({ ...prev, role: value }));
+  };
 
-  const isViewMode = mode === "view"
-  const isCreateMode = mode === "create"
-  const title =
-    isCreateMode
-      ? "Add User"
-      : mode === "edit"
-      ? "Edit User"
-      : "User Details"
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (isViewMode) {
+      onOpenChange(false); // Simplemente cierra el diálogo en modo vista
+      return;
+    }
+
+    // Validaciones básicas (puedes mejorarlas con react-hook-form)
+    if (!formData.name || !formData.email) {
+      alert("Name and email are required."); // Reemplaza con toasts
+      return;
+    }
+    if (isCreateMode && !formData.password) {
+      alert("Password is required for new users."); // Reemplaza con toasts
+      return;
+    }
+
+    // Prepara los datos para enviar a onSave
+    // NewUserPayload y UpdateUserPayload ya definen qué campos son opcionales
+    const payload: NewUserPayload | UpdateUserPayload = {
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        dni: formData.dni || undefined, // Enviar undefined si está vacío para que no se envíe la clave
+        telefono: formData.telefono || undefined,
+    };
+
+    if (formData.password) { // Solo incluye la contraseña si se proporcionó
+        payload.password = formData.password;
+    }
+
+    onSave(payload);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>
+            {isCreateMode && "Create New User"}
+            {mode === "edit" && "Edit User"}
+            {isViewMode && "View User Details"}
+          </DialogTitle>
+          {!isViewMode && (
+            <DialogDescription>
+              {isCreateMode
+                ? "Fill in the details to create a new user."
+                : "Make changes to the user's profile."}
+            </DialogDescription>
+          )}
         </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          {/* Name */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="name" className="text-right">
-              Name
-            </Label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="name">Name</Label>
             <Input
               id="name"
-              value={formData.name || ""}
-              onChange={(e) => handleChange("name", e.target.value)}
-              className="col-span-3"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
               disabled={isViewMode}
-              required
+              required={!isViewMode}
             />
           </div>
-
-          {/* Email */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="email" className="text-right">
-              Email
-            </Label>
+          <div>
+            <Label htmlFor="email">Email</Label>
             <Input
               id="email"
+              name="email"
               type="email"
-              value={formData.email || ""}
-              onChange={(e) => handleChange("email", e.target.value)}
-              className="col-span-3"
+              value={formData.email}
+              onChange={handleChange}
               disabled={isViewMode}
-              required
+              required={!isViewMode}
             />
           </div>
 
-          {/* Password (solo en create) */}
-          {isCreateMode && (
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="password" className="text-right">
-                Password
-              </Label>
+          {!isViewMode && ( // Contraseña solo para crear/editar
+            <div>
+              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                name="password"
                 type="password"
                 value={formData.password || ""}
-                onChange={(e) => handleChange("password", e.target.value)}
-                className="col-span-3"
-                required
+                onChange={handleChange}
+                placeholder={isCreateMode ? "Required" : "Leave blank to keep current"}
+                required={isCreateMode}
               />
             </div>
           )}
 
-          {/* Role */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="role" className="text-right">
-              Role
-            </Label>
+          <div>
+            <Label htmlFor="dni">DNI</Label>
+            <Input
+              id="dni"
+              name="dni"
+              value={formData.dni || ""}
+              onChange={handleChange}
+              disabled={isViewMode}
+            />
+          </div>
+          <div>
+            <Label htmlFor="telefono">Phone</Label>
+            <Input
+              id="telefono"
+              name="telefono"
+              value={formData.telefono || ""}
+              onChange={handleChange}
+              disabled={isViewMode}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="role">Role</Label>
             <Select
               value={formData.role}
-              onValueChange={(value) => handleChange("role", value)}
+              onValueChange={handleRoleChange}
               disabled={isViewMode}
             >
-              <SelectTrigger id="role" className="col-span-3">
+              <SelectTrigger id="role">
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="client">Client</SelectItem>
+                <SelectItem value="user">User</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Registered Date (solo si existe) */}
-          {formData.registeredDate && (
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="registeredDate" className="text-right">
-                Registered
-              </Label>
-              <Input
-                id="registeredDate"
-                value={formData.registeredDate}
-                className="col-span-3"
-                disabled
-              />
+          {isViewMode && user?.registeredDate && (
+            <div>
+              <Label>Registered Date</Label>
+              <Input value={new Date(user.registeredDate).toLocaleDateString()} disabled />
+            </div>
+          )}
+           {isViewMode && user?.status && (
+            <div>
+              <Label>Status</Label>
+              <Input value={user.status} disabled />
             </div>
           )}
 
-          {/* Footer */}
           <DialogFooter>
-            {!isViewMode && (
-              <Button type="submit">
-                {isCreateMode ? "Create" : "Save Changes"}
-              </Button>
-            )}
-            {isViewMode && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
+            {isViewMode ? (
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Close
+              </Button>
+            ) : (
+              <Button type="submit">
+                {isCreateMode ? "Create User" : "Save Changes"}
               </Button>
             )}
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

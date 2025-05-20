@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import type { User as UserType } from "@/lib/api-services"
-import { logout, getCurrentUser } from "@/app/api/users/authService"
+import { logout, getCurrentUser } from "@/lib/api/users/authService"
 
 export default function Navbar() {
   const router = useRouter()
